@@ -23,6 +23,8 @@
 
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
+
 using NUnit.Engine.Extensibility;
 
 namespace NUnit.Engine.Drivers
@@ -37,7 +39,7 @@ namespace NUnit.Engine.Drivers
             "</test-suite>";
 
         private const string RUN_RESULT_FORMAT =
-            "<test-suite type='Assembly' id='{0}' name='{1}' fullname='{2}' testcasecount='0' runstate='NotRunnable' result='Failed' label='Invalid'>" +
+            "<test-suite type='Assembly' id='{0}' name='{1}' fullname='{2}' testcasecount='0' runstate='NotRunnable' result='{4}' label='{5}'>" +
                 "<properties>" +
                     "<property name='_SKIPREASON' value='{3}'/>" +
                 "</properties>" +
@@ -49,12 +51,14 @@ namespace NUnit.Engine.Drivers
         private string _name;
         private string _fullname;
         private string _message;
+        private bool _isNoError;
 
-        public NotRunnableFrameworkDriver(string assemblyPath, string message)
+        public NotRunnableFrameworkDriver(string assemblyPath, string message, [Optional] bool isNoError)
         {
             _name = Escape(Path.GetFileName(assemblyPath));
             _fullname = Escape(Path.GetFullPath(assemblyPath));
             _message = Escape(message);
+            _isNoError = isNoError;
         }
 
         public string ID { get; set; }
@@ -71,7 +75,7 @@ namespace NUnit.Engine.Drivers
 
         public string Run(ITestEventListener listener, string filter)
         {
-            return string.Format(RUN_RESULT_FORMAT, TestID, _name, _fullname, _message);
+            return string.Format(RUN_RESULT_FORMAT, TestID, _name, _fullname, _message, (_isNoError ? "Skipped" : "Failed"), (_isNoError ? "Skipped" : "Invalid"));
         }
 
         public string Explore(string filter)

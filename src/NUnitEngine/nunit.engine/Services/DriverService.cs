@@ -84,8 +84,9 @@ namespace NUnit.Engine.Services
                 return new NotRunnableFrameworkDriver(assemblyPath, ex.Message);
             }
 
-            return new NotRunnableFrameworkDriver(assemblyPath, string.Format("No suitable tests found in '{0}'.\n" +
-                                                                              "Either assembly contains no tests or proper test driver has not been found.", assemblyPath));
+          bool isNoError = true;  // JB fork mode: do not fault on missing tests
+          return new NotRunnableFrameworkDriver(assemblyPath, string.Format("No suitable tests found in '{0}'." + Environment.NewLine + 
+                                                                              "Either assembly contains no tests or proper test driver has not been found.", assemblyPath), isNoError);
         }
 
         #endregion

@@ -21,11 +21,33 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // ***********************************************************************
 
-using System.Resources;
-using System.Reflection;
+using System;
+using System.Xml;
 
-// General Information about an assembly is controlled through the following 
-// set of attributes. Change these attribute values to modify the information
-// associated with an assembly.
-[assembly: AssemblyTitle("nunit.driver.tests")]
-[assembly: AssemblyDescription("Tests for nunit.driver")]
+namespace System.Runtime.CompilerServices
+{
+    [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Method)]
+    sealed class ExtensionAttribute : Attribute { }
+}
+
+namespace NUnit.Engine.Services.ProjectLoaders
+{
+    /// <summary>
+    /// SafeAttributeAccess provides an extension method for accessing XML attributes.
+    /// </summary>
+    public static class SafeAttributeAccess
+    {
+        /// <summary>
+        /// Gets the value of the given attribute.
+        /// </summary>
+        /// <param name="result">The result.</param>
+        /// <param name="name">The name.</param>
+        /// <returns></returns>
+        public static string GetAttribute(this XmlNode result, string name)
+        {
+            XmlAttribute attr = result.Attributes[name];
+
+            return attr == null ? null : attr.Value;
+        }
+    }
+}

@@ -16,8 +16,12 @@ var ErrorDetail = new List<string>();
 // SET PACKAGE VERSION
 //////////////////////////////////////////////////////////////////////
 
-var version = "3.3.0";
+var version = "3.5.0";
 var modifier = "";
+
+//For now, set teamcity extension verson and modifier separately
+var tcVersion = "1.0.0";
+var tcModifier = "";
 
 var isCompactFrameworkInstalled = FileExists(Environment.GetEnvironmentVariable("windir") + "\\Microsoft.NET\\Framework\\v3.5\\Microsoft.CompactFramework.CSharp.targets");
 
@@ -28,6 +32,7 @@ var isSilverlightSDKInstalled = FileExists(programFiles  + "\\MSBuild\\Microsoft
 var isAppveyor = BuildSystem.IsRunningOnAppVeyor;
 var dbgSuffix = configuration == "Debug" ? "-dbg" : "";
 var packageVersion = version + modifier + dbgSuffix;
+var teamcityVersion = tcVersion + tcModifier + dbgSuffix;
 
 //////////////////////////////////////////////////////////////////////
 // SUPPORTED FRAMEWORKS
@@ -71,9 +76,8 @@ var EXECUTABLE_FRAMEWORK_TESTS = "nunit.framework.tests.exe";
 var NUNITLITE_TESTS = "nunitlite.tests.dll";
 var EXECUTABLE_NUNITLITE_TESTS = "nunitlite.tests.exe";
 var ENGINE_TESTS = "nunit.engine.tests.dll";
-var PORTABLE_AGENT_TESTS = "agents/nunit.portable.agent.tests.dll";
 var ADDIN_TESTS = "addins/tests/addin-tests.dll";
-var V2_PORTABLE_AGENT_TESTS = "addins/v2-tests/nunit.v2.driver.tests.dll";
+var V2_DRIVER_TESTS = "addins/v2-tests/nunit.v2.driver.tests.dll";
 var CONSOLE_TESTS = "nunit3-console.tests.dll";
 
 // Packages
@@ -112,17 +116,23 @@ Task("InitializeBuild")
 			if (tag.IsTag)
 			{
 				packageVersion = tag.Name;
+				// NOTE: tag doesn't currently change the TeamCity version
 			}
 			else
 			{
 				var buildNumber = AppVeyor.Environment.Build.Number;
-				packageVersion = version + "-CI-" + buildNumber + dbgSuffix;
+
+				var suffix = "-CI-" + buildNumber + dbgSuffix;
+
 				if (AppVeyor.Environment.PullRequest.IsPullRequest)
-					packageVersion += "-PR-" + AppVeyor.Environment.PullRequest.Number;
+					suffix += "-PR-" + AppVeyor.Environment.PullRequest.Number;
 				else if (AppVeyor.Environment.Repository.Branch.StartsWith("release", StringComparison.OrdinalIgnoreCase))
-					packageVersion += "-PRE-" + buildNumber;
+					suffix += "-PRE-" + buildNumber;
 				else
-					packageVersion += "-" + AppVeyor.Environment.Repository.Branch;
+					suffix += "-" + AppVeyor.Environment.Repository.Branch;
+
+				packageVersion = version + suffix;
+				teamcityVersion = tcVersion + suffix;
 			}
 
 			AppVeyor.UpdateBuildVersion(packageVersion);
@@ -255,13 +265,6 @@ Task("BuildEngine")
 
         // Engine tests
         BuildProject("./src/NUnitEngine/nunit.engine.tests/nunit.engine.tests.csproj", configuration);
-
-        // Driver and tests
-        if(IsRunningOnWindows())
-        {
-            BuildProject("./src/NUnitEngine/Portable/nunit.portable.agent/nunit.portable.agent.csproj", configuration);
-            BuildProject("./src/NUnitEngine/Portable/nunit.portable.agent.tests/nunit.portable.agent.tests.csproj", configuration);
-        }
 
         // Addins
         BuildProject("./src/NUnitEngine/Addins/nunit-project-loader/nunit-project-loader.csproj", configuration);
@@ -403,14 +406,6 @@ Task("TestEngine")
         RunTest(NUNIT3_CONSOLE, BIN_DIR, ENGINE_TESTS, "TestEngine", ref ErrorDetail);
     });
 
-Task("TestDriver")
-    .IsDependentOn("Build")
-    .WithCriteria(IsRunningOnWindows)
-    .Does(() =>
-    {
-        RunTest(NUNIT3_CONSOLE, BIN_DIR, PORTABLE_AGENT_TESTS, "TestDriver", ref ErrorDetail);
-    });
-
 Task("TestAddins")
     .OnError(exception => { ErrorDetail.Add(exception.Message); })
     .IsDependentOn("Build")
@@ -424,7 +419,7 @@ Task("TestV2Driver")
     .OnError(exception => { ErrorDetail.Add(exception.Message); })
     .Does(() =>
     {
-        RunTest(NUNIT3_CONSOLE, BIN_DIR, V2_PORTABLE_AGENT_TESTS,"TestV2Driver", ref ErrorDetail);
+        RunTest(NUNIT3_CONSOLE, BIN_DIR, V2_DRIVER_TESTS,"TestV2Driver", ref ErrorDetail);
     });
 
 Task("TestConsole")
@@ -466,10 +461,12 @@ var BinFiles = new FilePath[]
     "nunit.engine.tests.dll.config",
     "nunit.framework.dll",
     "nunit.framework.xml",
+    "NUnit.System.Linq.dll",
     "NUnit2TestResult.xsd",
     "nunit3-console.exe",
     "nunit3-console.exe.config",
     "nunit3-console.tests.dll",
+    "TestListWithEmptyLine.tst",
     "nunitlite.dll",
     "TextSummary.xslt",
     "addins/nunit-project-loader.dll",
@@ -488,9 +485,7 @@ var BinFiles = new FilePath[]
     "addins/tests/vs-project-loader.dll",
     "addins/v2-tests/nunit.framework.dll",
     "addins/v2-tests/nunit.framework.xml",
-    "addins/v2-tests/nunit.v2.driver.tests.dll",
-    "agents/nunit.portable.agent.dll",
-    "agents/nunit.portable.agent.xml"
+    "addins/v2-tests/nunit.v2.driver.tests.dll"
 };
 
 // Not all of these are present in every framework
@@ -636,20 +631,12 @@ Task("PackageNuGet")
             OutputDirectory = PACKAGE_DIR,
             NoPackageAnalysis = true
         });
-        NuGetPack("nuget/runners/nunit.console-runner-with-extensions.nuspec", new NuGetPackSettings()
-        {
-            Version = packageVersion,
-            BasePath = currentImageDir,
-            OutputDirectory = PACKAGE_DIR,
-            NoPackageAnalysis = true
-        });
-        NuGetPack("nuget/runners/nunit.runners.nuspec", new NuGetPackSettings()
-        {
-            Version = packageVersion,
-            BasePath = currentImageDir,
-            OutputDirectory = PACKAGE_DIR,
-            NoPackageAnalysis = true
-        });
+
+        // NOTE: We can't use NuGetPack for these because our current version
+        // of Cake doesn't support the Properties option.
+		PackageRunnerWithExtensions("nuget/runners/nunit.console-runner-with-extensions.nuspec", packageVersion, teamcityVersion, currentImageDir, PACKAGE_DIR);
+
+		PackageRunnerWithExtensions("nuget/runners/nunit.runners.nuspec", packageVersion, teamcityVersion, currentImageDir, PACKAGE_DIR);
 
         // Package engine
         NuGetPack("nuget/engine/nunit.engine.nuspec", new NuGetPackSettings()
@@ -696,18 +683,10 @@ Task("PackageNuGet")
             OutputDirectory = PACKAGE_DIR,
             NoPackageAnalysis = true
         });
-
-        // Package the portable agent
-        NuGetPack("nuget/engine/nunit.portable.agent.nuspec", new NuGetPackSettings()
-        {
-            Version = packageVersion,
-            BasePath = currentImageDir,
-            OutputDirectory = PACKAGE_DIR,
-            NoPackageAnalysis = true
-        });
         NuGetPack("nuget/extensions/teamcity-event-listener.nuspec", new NuGetPackSettings()
         {
-            Version = packageVersion,
+		    // The teamcity-event-listener extension uses its own versioning
+            Version = teamcityVersion,
             BasePath = currentImageDir,
             OutputDirectory = PACKAGE_DIR,
             NoPackageAnalysis = true
@@ -880,6 +859,20 @@ void RunTest(FilePath exePath, DirectoryPath workingDir, string arguments, strin
 }
 
 //////////////////////////////////////////////////////////////////////
+// HELPER METHODS - PACKAGING
+//////////////////////////////////////////////////////////////////////
+
+void PackageRunnerWithExtensions(string package, string version, string tcVersion, string imageDir, string packageDir)
+{
+	var arguments = string.Format(
+		"pack {0} -Version {1} -Properties teamcityVersion={2} -BasePath {3} -OutputDirectory {4} -NoPackageAnalysis",
+		package, version, tcVersion, imageDir, packageDir);
+	var nugetPath = File("tools/nuget.exe");
+
+    StartProcess(nugetPath, arguments);
+}
+
+//////////////////////////////////////////////////////////////////////
 // TASK TARGETS
 //////////////////////////////////////////////////////////////////////
 
@@ -906,7 +899,6 @@ Task("BuildAllFrameworks")
 Task("TestAll")
     .IsDependentOn("TestAllFrameworks")
     .IsDependentOn("TestEngine")
-    .IsDependentOn("TestDriver")
     .IsDependentOn("TestAddins")
     .IsDependentOn("TestV2Driver")
     .IsDependentOn("TestConsole");
@@ -915,7 +907,6 @@ Task("TestAll")
 Task("Test")
     .IsDependentOn("TestAllFrameworks")
     .IsDependentOn("TestEngine")
-    .IsDependentOn("TestDriver")
     .IsDependentOn("TestAddins")
     .IsDependentOn("TestV2Driver")
     .IsDependentOn("TestConsole");

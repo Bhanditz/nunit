@@ -80,9 +80,6 @@
     <Compile Include="..\..\Common\nunit\Tokenizer.cs">
       <Link>Services\Tokenizer.cs</Link>
     </Compile>
-    <Compile Include="..\..\Common\nunit\XmlHelper.cs">
-      <Link>XmlHelper.cs</Link>
-    </Compile>
     <Compile Include="..\EngineVersion.cs">
       <Link>Properties\EngineVersion.cs</Link>
     </Compile>
@@ -135,6 +132,7 @@
     <Compile Include="Runners\TestEventDispatcher.cs" />
     <Compile Include="Runners\TestExecutionTask.cs" />
     <Compile Include="RuntimeType.cs" />
+    <Compile Include="Services\ExtensionAssembly.cs" />
     <Compile Include="Services\ExtensionService.cs" />
     <Compile Include="Services\ResultWriters\NUnit3XmlResultWriter.cs" />
     <Compile Include="Services\ResultWriters\TestCaseResultWriter.cs" />
@@ -159,6 +157,7 @@
     <Compile Include="Services\TestFilterService.cs" />
     <Compile Include="TestEngine.cs" />
     <Compile Include="TestEngineResult.cs" />
+    <Compile Include="XmlHelper.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\nunit.engine.api\nunit.engine.api.csproj">
